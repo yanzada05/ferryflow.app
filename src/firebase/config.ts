@@ -1,29 +1,20 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  initializeAuth,
-  getReactNativePersistence,
-} from "firebase/auth/react-native";
+import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBfmQARnPqjDnMMobGWOMJWYk5NpCTH5Oc",
-  authDomain: "ferryflow-71d96.firebaseapp.com",
-  projectId: "ferryflow-71d96",
-  storageBucket: "ferryflow-71d96.appspot.com",
-  messagingSenderId: "422882231621",
-  appId: "1:422882231621:web:240c8abf5c2e4b02be2a2c",
-  measurementId: "G-PGV8V0VGMT",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Evita inicialização duplicada
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Inicializa o Auth com persistência local
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
-
+export const auth = getAuth(app);
 export const db = getFirestore(app);
-
 export default app;
