@@ -1,0 +1,43 @@
+{
+  "name": "ferryflow-app",
+  "version": "3.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "prebuild": "expo prebuild",
+    "build:apk:local": "expo prebuild && cd android && gradlew assembleRelease",
+    "build:eas": "eas build -p android --profile preview"
+  },
+  "dependencies": {
+    "@expo-google-fonts/inter": "^0.2.3",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "8.4.4",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.11.0",
+    "axios": "^1.13.2",
+    "expo": "^54.0.23",
+    "expo-device": "~6.0.1",
+    "expo-font": "~14.0.9",
+    "expo-linear-gradient": "~15.0.7",
+    "expo-location": "~17.0.1",
+    "expo-notifications": "~0.28.12",
+    "expo-status-bar": "~3.0.8",
+    "firebase": "^10.12.2",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-maps": "1.20.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-url-polyfill": "^1.3.0",
+    "react-native-webview": "13.15.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.4",
+    "@types/react-native": "^0.71.13",
+    "typescript": "^5.5.0"
+  }
+}
