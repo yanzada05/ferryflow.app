@@ -1,23 +1,11 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "jsx": "react-jsx",
     "strict": true,
-    "allowJs": false,
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "noImplicitAny": true, // Garante que não haja 'any' implícito
+    "jsx": "react-native", // Essencial para arquivos .tsx
+    "lib": ["DOM", "ES2022"],
+    "moduleResolution": "bundler" // Mantenha o 'bundler' que corrigimos
   },
-  "include": ["src", "App.tsx"],
-  "extends": "expo/tsconfig.base"
+  "include": ["**/*.ts", "**/*.tsx", ".expo/react-native-action-sheet.d.ts"]
 }

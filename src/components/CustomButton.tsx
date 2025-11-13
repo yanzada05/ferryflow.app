@@ -1,19 +1,59 @@
-import React from 'react';
-import { TouchableOpacity, Text, ViewStyle } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React from "react";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { useTheme } from "../theme";
 
-type Props = {
+// 1. Defina a interface para as props do componente
+interface CustomButtonProps {
   title: string;
-  onPress?: () => void;
-  style?: ViewStyle | ViewStyle[];
-};
+  onPress: () => void;
+  disabled?: boolean; // '?' torna a prop opcional
+}
 
-export default function CustomButton({ title, onPress, style }: Props) {
+// 2. Aplique a interface às props
+export default function CustomButton({
+  title,
+  onPress,
+  disabled = false,
+}: CustomButtonProps) {
+  const theme = useTheme(); // Agora 'theme' tem tipos!
+
+  const buttonStyles = [
+    styles.button,
+    { backgroundColor: theme.colors.primary },
+    disabled && styles.disabledButton,
+  ];
+
   return (
-    <TouchableOpacity onPress={onPress} style={style as any}>
-      <LinearGradient colors={['#1E88E5', '#1565C0']} style={{paddingVertical:12, alignItems:'center', borderRadius:10}}>
-        <Text style={{color:'#fff', fontWeight:'700'}}>{title}</Text>
-      </LinearGradient>
+    <TouchableOpacity
+      onPress={onPress}
+      style={buttonStyles}
+      disabled={disabled}
+    >
+      <Text style={[styles.text, { color: theme.colors.onPrimary }]}>
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  text: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  disabledButton: {
+    backgroundColor: "#BDBDBD",
+    elevation: 0,
+  },
+});

@@ -1,234 +1,360 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
+  ScrollView,
   View,
   Text,
+  StyleSheet,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
+  Modal, // Usaremos o Modal para a seleção de veículos
 } from "react-native";
-import { SafeAreaView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
-import CustomButton from "../components/CustomButton";
-import PriceSummary from "../components/PriceSummary";
-import axios from "axios";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { AppScreenProps } from "../../App";
+import { FirebaseError } from "firebase/app";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../firebase/config";
-import { WebView } from "react-native-webview";
 
-export default function PurchaseScreen() {
-  const route = useRoute();
-  const nav = useNavigation();
-  const theme = useTheme();
-  const passedTime = (route.params as any)?.time;
+// Importe o seletor de Data/Hora que acabamos de instalar
+import DateTimePicker from "@react-native-community/datetimepicker";
+
+// Importe nossos componentes e tipos
+import CustomButton from "../components/CustomButton";
+import Stepper from "../components/Stepper"; // O contador [ - ] 1 [ + ]
+import { VehicleType, VEHICLE_PRICES, PASSENGER_PRICES } from "../types/data";
+
+// Define as props desta tela
+type PurchaseScreenProps = AppScreenProps<"Purchase">;
+
+// Lista de horários disponíveis (Você pode mudar isso)
+const AVAILABLE_TIMES = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
+
+export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
+  const theme = useTheme() as any; // Usamos 'as any' para simplificar a tipagem do tema
+
+  // Estados para o formulário
+  const [loading, setLoading] = useState(false);
+  const [date, setDate] = useState(new Date());
+  const [time, setTime] = useState(AVAILABLE_TIMES[0]); // Começa com o primeiro horário
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
-  const [vehicle, setVehicle] = useState("Carro pequeno");
-  const [paymentMethod, setPaymentMethod] = useState("Pix");
-  const [loading, setLoading] = useState(false);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const [currentTicketId, setCurrentTicketId] = useState<string | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>(
+    VehicleType.NENHUM
+  );
 
-  const vehicleExtra =
-    {
-      "Carro pequeno": 25,
-      Caminhonete: 50,
-      Caminhão: 75,
-      Ônibus: 100,
-    }[vehicle] || 0;
+  // Estados para controlar os seletores (Pickers e Modals)
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false); // Para o modal de horários
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
 
-  const total = adults * 40 + children * 15 + vehicleExtra;
+  // Calcula o preço total automaticamente
+  const totalPrice = useMemo(() => {
+    const adultsPrice = adults * PASSENGER_PRICES.adult;
+    const childrenPrice = children * PASSENGER_PRICES.child;
+    const vehiclePrice = VEHICLE_PRICES[selectedVehicle];
+    return adultsPrice + childrenPrice + vehiclePrice;
+  }, [adults, children, selectedVehicle]);
 
+  // Função para lidar com a seleção de Data
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false); // Esconde o seletor
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+  };
+
+  // Função para lidar com a seleção de Horário
+  const onSelectTime = (selectedTime: string) => {
+    setTime(selectedTime);
+    setShowTimePicker(false); // Esconde o modal de horários
+  };
+
+  // Função para lidar com a seleção de Veículo
+  const onSelectVehicle = (vehicle: VehicleType) => {
+    setSelectedVehicle(vehicle);
+    setShowVehicleModal(false); // Esconde o modal de veículos
+  };
+
+  // Função FINAL: Envia tudo para o Firebase
   const handleConfirm = async () => {
-    try {
-      setLoading(true);
-      // 1) Create a ticket in Firestore with status PENDING
-      const user = auth.currentUser;
-      const docRef = await addDoc(collection(db, "tickets"), {
-        uid: user?.uid,
-        adults,
-        children,
-        vehicle,
-        paymentMethod,
-        total,
-        time: passedTime || "14:00",
-        status: "PENDING",
-        createdAt: serverTimestamp(),
-      });
-      setCurrentTicketId(docRef.id);
+    setLoading(true);
+    const user = auth.currentUser;
 
-      // 2) Call Cloud Function to create Mercado Pago preference (returns init_point)
-      // Replace the URL below with your deployed Cloud Function URL
-      const cfUrl =
-        "https://us-central1-YOUR_PROJECT.cloudfunctions.net/createPreference";
-      const resp = await axios.post(cfUrl, {
-        title: "Passagem FerryFlow",
-        quantity: 1,
-        price: total,
-        ticketId: docRef.id,
-      });
-      setCheckoutUrl(resp.data.init_point);
-    } catch (err: any) {
-      Alert.alert("Erro", err.message || String(err));
+    if (!user) {
+      Alert.alert("Erro", "Usuário não autenticado.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Cria o novo documento do ticket
+      const newTicket = {
+        uid: user.uid,
+        origin: "Ponta da Espera",
+        destination: "Cujupe",
+        date: date.toLocaleDateString("pt-BR"), // Formata a data
+        time: time, // Usa o horário selecionado
+        passengers: {
+          adults,
+          children,
+        },
+        vehicle: selectedVehicle,
+        totalPrice: totalPrice,
+        status: "CONFIRMADO",
+        createdAt: serverTimestamp(),
+      };
+
+      // 2. Salva no Firebase
+      const docRef = await addDoc(collection(db, "tickets"), newTicket);
+
+      // 3. Navega para a tela do Ticket (Corrigindo o bug!)
+      navigation.navigate("Ticket", { ticketId: docRef.id });
+    } catch (err) {
+      if (err instanceof FirebaseError) {
+        Alert.alert("Erro ao confirmar", err.message);
+      } else {
+        Alert.alert("Erro", "Ocorreu um erro inesperado.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (checkoutUrl) {
-    return (
-      <WebView
-        source={{ uri: checkoutUrl }}
-        onNavigationStateChange={(navState) => {
-          if (navState.url.includes("success")) {
-            Alert.alert(
-              "Pagamento iniciado. Verifique o ticket para o status."
-            );
-          }
-        }}
-      />
-    );
-  }
+  // Estilos
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg,
+    },
+    scrollContainer: {
+      padding: 24,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "bold",
+      color: theme.colors.text,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: theme.colors.muted,
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: theme.colors.text,
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    pickerButton: {
+      backgroundColor: theme.colors.surface,
+      padding: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "#ddd",
+      marginBottom: 12,
+    },
+    pickerButtonText: {
+      fontSize: 16,
+      color: theme.colors.text,
+    },
+    totalContainer: {
+      marginTop: 32,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: "#eee",
+    },
+    totalText: {
+      fontSize: 22,
+      fontWeight: "bold",
+      color: theme.colors.text,
+      textAlign: "center",
+    },
+    totalPrice: {
+      fontSize: 28,
+      fontWeight: "bold",
+      color: theme.colors.primary,
+      textAlign: "center",
+      marginBottom: 24,
+    },
+    // Estilos do Modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      padding: 24,
+      width: "90%",
+      maxHeight: "80%",
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginBottom: 16,
+      textAlign: "center",
+    },
+    modalItem: {
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#eee",
+    },
+    modalItemText: {
+      fontSize: 18,
+      textAlign: "center",
+    },
+    modalCancel: {
+      marginTop: 16,
+      padding: 12,
+    },
+    modalCancelText: {
+      fontSize: 16,
+      color: "red",
+      textAlign: "center",
+    },
+  });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <View style={{ padding: 16 }}>
-        <Text style={{ fontWeight: "700", marginBottom: 8 }}>
-          Comprar Passagem
-        </Text>
-        <Text style={{ color: theme.colors.muted }}>
-          Rota: Ponta da Espera → Cujupe
-        </Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <Text style={styles.title}>Comprar Passagem</Text>
+        <Text style={styles.subtitle}>Ponta da Espera → Cujupe</Text>
 
-        <View
-          style={{
-            marginTop: 12,
-            backgroundColor: "#fff",
-            padding: 12,
-            borderRadius: 12,
-          }}
+        {/* --- Seção de Data e Hora --- */}
+        <Text style={styles.sectionTitle}>Data e Horário</Text>
+
+        {/* Botão de Data */}
+        <TouchableOpacity
+          style={styles.pickerButton}
+          onPress={() => setShowDatePicker(true)}
         >
-          <Text style={{ fontWeight: "700" }}>Adultos</Text>
-          <View style={{ flexDirection: "row", marginTop: 8 }}>
-            <TouchableOpacity
-              onPress={() => setAdults(Math.max(0, adults - 1))}
-              style={{
-                padding: 8,
-                backgroundColor: "#F3F4F6",
-                borderRadius: 8,
-                marginRight: 8,
-              }}
-            >
-              <Text>-</Text>
-            </TouchableOpacity>
-            <View style={{ justifyContent: "center" }}>
-              <Text>{adults}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setAdults(adults + 1)}
-              style={{
-                padding: 8,
-                backgroundColor: "#F3F4F6",
-                borderRadius: 8,
-                marginLeft: 8,
-              }}
-            >
-              <Text>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={{ fontWeight: "700", marginTop: 12 }}>Crianças</Text>
-          <View style={{ flexDirection: "row", marginTop: 8 }}>
-            <TouchableOpacity
-              onPress={() => setChildren(Math.max(0, children - 1))}
-              style={{
-                padding: 8,
-                backgroundColor: "#F3F4F6",
-                borderRadius: 8,
-                marginRight: 8,
-              }}
-            >
-              <Text>-</Text>
-            </TouchableOpacity>
-            <View style={{ justifyContent: "center" }}>
-              <Text>{children}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setChildren(children + 1)}
-              style={{
-                padding: 8,
-                backgroundColor: "#F3F4F6",
-                borderRadius: 8,
-                marginLeft: 8,
-              }}
-            >
-              <Text>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={{ fontWeight: "700", marginTop: 12 }}>
-            Tipo de veículo
+          <Text style={styles.pickerButtonText}>
+            Data: {date.toLocaleDateString("pt-BR")}
           </Text>
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
-          >
-            {["Carro pequeno", "Caminhonete", "Caminhão", "Ônibus"].map((v) => (
-              <TouchableOpacity
-                key={v}
-                onPress={() => setVehicle(v)}
-                style={{
-                  padding: 8,
-                  backgroundColor: v === vehicle ? "#E0F2FE" : "#fff",
-                  borderRadius: 8,
-                  marginRight: 8,
-                  marginBottom: 8,
-                  borderWidth: 1,
-                  borderColor: "#E5E7EB",
-                }}
-              >
-                <Text>{v}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        </TouchableOpacity>
 
-          <Text style={{ fontWeight: "700", marginTop: 12 }}>
-            Método de pagamento
+        {/* Botão de Horário */}
+        <TouchableOpacity
+          style={styles.pickerButton}
+          onPress={() => setShowTimePicker(true)}
+        >
+          <Text style={styles.pickerButtonText}>Horário: {time}</Text>
+        </TouchableOpacity>
+
+        {/* Seletor de Data (só aparece se showDatePicker for true) */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="default"
+            minimumDate={new Date()} // Não pode selecionar datas passadas
+            onChange={onChangeDate}
+          />
+        )}
+
+        {/* --- Seção de Passageiros --- */}
+        <Text style={styles.sectionTitle}>Passageiros</Text>
+        <Stepper
+          label="Adultos"
+          value={adults}
+          onIncrement={() => setAdults((a) => a + 1)}
+          onDecrement={() => setAdults((a) => Math.max(1, a - 1))}
+        />
+        <Stepper
+          label="Crianças"
+          value={children}
+          onIncrement={() => setChildren((c) => c + 1)}
+          onDecrement={() => setChildren((c) => Math.max(0, c - 1))}
+        />
+
+        {/* --- Seção de Veículo --- */}
+        <Text style={styles.sectionTitle}>Veículo</Text>
+        <TouchableOpacity
+          style={styles.pickerButton}
+          onPress={() => setShowVehicleModal(true)}
+        >
+          <Text style={styles.pickerButtonText}>
+            Veículo Selecionado: {selectedVehicle}
           </Text>
-          <View
-            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}
-          >
-            {["Pix", "Cartão de Crédito", "Cartão de Débito", "Dinheiro"].map(
-              (m) => (
+        </TouchableOpacity>
+
+        {/* --- Total e Botão de Confirmar --- */}
+        <View style={styles.totalContainer}>
+          <Text style={styles.totalText}>Valor Total</Text>
+          <Text style={styles.totalPrice}>R$ {totalPrice.toFixed(2)}</Text>
+          <CustomButton
+            title={loading ? "Confirmando..." : "Confirmar Compra"}
+            onPress={handleConfirm}
+            disabled={loading}
+          />
+        </View>
+      </ScrollView>
+
+      {/* --- Modal de Seleção de Horário --- */}
+      <Modal
+        visible={showTimePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Selecione um Horário</Text>
+            <ScrollView>
+              {AVAILABLE_TIMES.map((t) => (
                 <TouchableOpacity
-                  key={m}
-                  onPress={() => setPaymentMethod(m)}
-                  style={{
-                    padding: 8,
-                    backgroundColor: m === paymentMethod ? "#E0F2FE" : "#fff",
-                    borderRadius: 8,
-                    marginRight: 8,
-                    marginBottom: 8,
-                    borderWidth: 1,
-                    borderColor: "#E5E7EB",
-                  }}
+                  key={t}
+                  style={styles.modalItem}
+                  onPress={() => onSelectTime(t)}
                 >
-                  <Text>{m}</Text>
+                  <Text style={styles.modalItemText}>{t}</Text>
                 </TouchableOpacity>
-              )
-            )}
-          </View>
-
-          <PriceSummary total={total} />
-
-          <View style={{ marginTop: 12 }}>
-            {loading ? (
-              <ActivityIndicator />
-            ) : (
-              <CustomButton title="Confirmar Compra" onPress={handleConfirm} />
-            )}
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowTimePicker(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </Modal>
+
+      {/* --- Modal de Seleção de Veículo --- */}
+      <Modal
+        visible={showVehicleModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVehicleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Selecione um Veículo</Text>
+            <ScrollView>
+              {Object.values(VehicleType).map((vehicle) => (
+                <TouchableOpacity
+                  key={vehicle}
+                  style={styles.modalItem}
+                  onPress={() => onSelectVehicle(vehicle)}
+                >
+                  <Text style={styles.modalItemText}>{vehicle}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setShowVehicleModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

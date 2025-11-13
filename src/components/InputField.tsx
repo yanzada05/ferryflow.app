@@ -1,17 +1,60 @@
-import React from 'react';
-import { TextInput, View } from 'react-native';
+import React from "react";
+import { TextInput, StyleSheet, View, TextInputProps } from "react-native";
+import { useTheme } from "../theme";
 
-type Props = {
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder?: string;
-  secure?: boolean;
-};
+// 1. Defina as props.
+// Usamos 'extends TextInputProps' para que o TypeScript
+// saiba que 'keyboardType', 'autoCapitalize', 'value', 'onChangeText', etc.
+// são props válidas.
+interface InputFieldProps extends TextInputProps {
+  secure?: boolean; // Prop customizada para conveniência
+}
 
-export default function InputField({ value, onChangeText, placeholder, secure }: Props) {
+// 2. Tipe as props e separe 'secure' do '...rest' (outras props)
+export default function InputField({ secure, ...restProps }: InputFieldProps) {
+  const theme = useTheme();
+
   return (
-    <View style={{marginBottom:12}}>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} secureTextEntry={secure} placeholderTextColor="#9CA3AF" style={{height:52, backgroundColor:'#fff', borderRadius:10, paddingLeft:16, borderWidth:1, borderColor:'#E5E7EB'}} />
+    <View
+      style={[
+        styles.container,
+        {
+          // Usei as cores do seu tema
+          borderColor: theme.colors.muted,
+          backgroundColor: theme.colors.surface,
+        },
+      ]}
+    >
+      <TextInput
+        style={[
+          styles.input,
+          {
+            color: theme.colors.text,
+            fontFamily: theme.fonts.primaryRegular, // Adicionei a fonte do tema
+          },
+        ]}
+        placeholderTextColor={theme.colors.muted}
+        // 3. Passe todas as outras props (como value, placeholder, etc.)
+        {...restProps}
+        // 4. Use a prop 'secure' para ligar 'secureTextEntry'
+        secureTextEntry={secure}
+      />
     </View>
   );
 }
+
+// Criei um StyleSheet com base no seu tema
+const styles = StyleSheet.create({
+  container: {
+    width: "100%",
+    height: 52, // Altura padrão para um campo de input
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    marginBottom: 16, // Espaçamento padrão
+  },
+  input: {
+    fontSize: 16,
+  },
+});
