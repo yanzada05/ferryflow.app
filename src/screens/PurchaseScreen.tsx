@@ -6,48 +6,42 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Modal, // Usaremos o Modal para a seleção de veículos
+  Modal,
+  Linking,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { AppScreenProps } from "../../App";
-import { FirebaseError } from "firebase/app";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db, auth } from "../firebase/config";
-
-// Importe o seletor de Data/Hora que acabamos de instalar
+import { auth } from "../firebase/config";
 import DateTimePicker from "@react-native-community/datetimepicker";
-
-// Importe nossos componentes e tipos
 import CustomButton from "../components/CustomButton";
-import Stepper from "../components/Stepper"; // O contador [ - ] 1 [ + ]
+import Stepper from "../components/Stepper";
 import { VehicleType, VEHICLE_PRICES, PASSENGER_PRICES } from "../types/data";
 
-// Define as props desta tela
+// URL da API na Vercel
+const API_URL = "https://ferryflow-v3.vercel.app/api/create-preference";
+
 type PurchaseScreenProps = AppScreenProps<"Purchase">;
 
-// Lista de horários disponíveis (Você pode mudar isso)
 const AVAILABLE_TIMES = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
 
 export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
-  const theme = useTheme() as any; // Usamos 'as any' para simplificar a tipagem do tema
+  const theme = useTheme() as any;
 
-  // Estados para o formulário
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState(new Date());
-  const [time, setTime] = useState(AVAILABLE_TIMES[0]); // Começa com o primeiro horário
+  const [time, setTime] = useState(AVAILABLE_TIMES[0]);
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>(
     VehicleType.NENHUM
   );
 
-  // Estados para controlar os seletores (Pickers e Modals)
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false); // Para o modal de horários
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [showVehicleModal, setShowVehicleModal] = useState(false);
 
-  // Calcula o preço total automaticamente
   const totalPrice = useMemo(() => {
     const adultsPrice = adults * PASSENGER_PRICES.adult;
     const childrenPrice = children * PASSENGER_PRICES.child;
@@ -55,27 +49,24 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
     return adultsPrice + childrenPrice + vehiclePrice;
   }, [adults, children, selectedVehicle]);
 
-  // Função para lidar com a seleção de Data
   const onChangeDate = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false); // Esconde o seletor
+    setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
     }
   };
 
-  // Função para lidar com a seleção de Horário
   const onSelectTime = (selectedTime: string) => {
     setTime(selectedTime);
-    setShowTimePicker(false); // Esconde o modal de horários
+    setShowTimePicker(false);
   };
 
-  // Função para lidar com a seleção de Veículo
   const onSelectVehicle = (vehicle: VehicleType) => {
     setSelectedVehicle(vehicle);
-    setShowVehicleModal(false); // Esconde o modal de veículos
+    setShowVehicleModal(false);
   };
 
-  // Função FINAL: Envia tudo para o Firebase
+  // Função atualizada: chama a API do Vercel
   const handleConfirm = async () => {
     setLoading(true);
     const user = auth.currentUser;
@@ -87,40 +78,94 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
     }
 
     try {
-      // 1. Cria o novo documento do ticket
-      const newTicket = {
-        uid: user.uid,
-        origin: "Ponta da Espera",
-        destination: "Cujupe",
-        date: date.toLocaleDateString("pt-BR"), // Formata a data
-        time: time, // Usa o horário selecionado
-        passengers: {
-          adults,
-          children,
+      console.log("Enviando requisição para API...");
+
+      // Chama a API da Vercel
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        vehicle: selectedVehicle,
-        totalPrice: totalPrice,
-        status: "CONFIRMADO",
-        createdAt: serverTimestamp(),
-      };
+        body: JSON.stringify({
+          userId: user.uid,
+          scheduleId: `${date.toISOString().split("T")[0]}-${time}`, // Ex: "2024-11-16-10:00"
+          time: time,
+          date: date.toISOString(),
+          vehicleType: selectedVehicle,
+          price: totalPrice,
+          // Dados adicionais (opcional, você pode salvar depois no webhook)
+          passengers: {
+            adults,
+            children,
+          },
+        }),
+      });
 
-      // 2. Salva no Firebase
-      const docRef = await addDoc(collection(db, "tickets"), newTicket);
+      const data = await response.json();
 
-      // 3. Navega para a tela do Ticket (Corrigindo o bug!)
-      navigation.navigate("Ticket", { ticketId: docRef.id });
-    } catch (err) {
-      if (err instanceof FirebaseError) {
-        Alert.alert("Erro ao confirmar", err.message);
-      } else {
-        Alert.alert("Erro", "Ocorreu um erro inesperado.");
+      console.log("Resposta da API:", data);
+
+      if (data.error) {
+        Alert.alert(
+          "Erro",
+          data.message || "Não foi possível processar a compra"
+        );
+        setLoading(false);
+        return;
       }
-    } finally {
+
+      if (data.init_point) {
+        // Pergunta ao usuário se quer abrir o pagamento
+        Alert.alert(
+          "Pagamento",
+          "Você será redirecionado para o Mercado Pago para finalizar o pagamento.",
+          [
+            {
+              text: "Cancelar",
+              style: "cancel",
+              onPress: () => setLoading(false),
+            },
+            {
+              text: "Pagar Agora",
+              onPress: async () => {
+                try {
+                  const canOpen = await Linking.canOpenURL(data.init_point);
+
+                  if (canOpen) {
+                    await Linking.openURL(data.init_point);
+
+                    // Navega para a tela do ticket
+                    navigation.navigate("Ticket", { ticketId: data.ticketId });
+                  } else {
+                    Alert.alert(
+                      "Erro",
+                      "Não foi possível abrir o link de pagamento"
+                    );
+                  }
+                } catch (error) {
+                  console.error("Erro ao abrir link:", error);
+                  Alert.alert("Erro", "Não foi possível abrir o Mercado Pago");
+                } finally {
+                  setLoading(false);
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Erro", "Link de pagamento não foi gerado");
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Erro ao processar compra:", error);
+      Alert.alert(
+        "Erro",
+        "Falha na conexão com o servidor. Verifique sua internet."
+      );
       setLoading(false);
     }
   };
 
-  // Estilos
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -178,7 +223,6 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
       textAlign: "center",
       marginBottom: 24,
     },
-    // Estilos do Modal
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -224,10 +268,8 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
         <Text style={styles.title}>Comprar Passagem</Text>
         <Text style={styles.subtitle}>Ponta da Espera → Cujupe</Text>
 
-        {/* --- Seção de Data e Hora --- */}
         <Text style={styles.sectionTitle}>Data e Horário</Text>
 
-        {/* Botão de Data */}
         <TouchableOpacity
           style={styles.pickerButton}
           onPress={() => setShowDatePicker(true)}
@@ -237,7 +279,6 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
           </Text>
         </TouchableOpacity>
 
-        {/* Botão de Horário */}
         <TouchableOpacity
           style={styles.pickerButton}
           onPress={() => setShowTimePicker(true)}
@@ -245,18 +286,16 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
           <Text style={styles.pickerButtonText}>Horário: {time}</Text>
         </TouchableOpacity>
 
-        {/* Seletor de Data (só aparece se showDatePicker for true) */}
         {showDatePicker && (
           <DateTimePicker
             value={date}
             mode="date"
             display="default"
-            minimumDate={new Date()} // Não pode selecionar datas passadas
+            minimumDate={new Date()}
             onChange={onChangeDate}
           />
         )}
 
-        {/* --- Seção de Passageiros --- */}
         <Text style={styles.sectionTitle}>Passageiros</Text>
         <Stepper
           label="Adultos"
@@ -271,7 +310,6 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
           onDecrement={() => setChildren((c) => Math.max(0, c - 1))}
         />
 
-        {/* --- Seção de Veículo --- */}
         <Text style={styles.sectionTitle}>Veículo</Text>
         <TouchableOpacity
           style={styles.pickerButton}
@@ -282,19 +320,22 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
           </Text>
         </TouchableOpacity>
 
-        {/* --- Total e Botão de Confirmar --- */}
         <View style={styles.totalContainer}>
           <Text style={styles.totalText}>Valor Total</Text>
           <Text style={styles.totalPrice}>R$ {totalPrice.toFixed(2)}</Text>
-          <CustomButton
-            title={loading ? "Confirmando..." : "Confirmar Compra"}
-            onPress={handleConfirm}
-            disabled={loading}
-          />
+
+          {loading ? (
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          ) : (
+            <CustomButton
+              title="Confirmar e Pagar"
+              onPress={handleConfirm}
+              disabled={loading}
+            />
+          )}
         </View>
       </ScrollView>
 
-      {/* --- Modal de Seleção de Horário --- */}
       <Modal
         visible={showTimePicker}
         transparent={true}
@@ -325,7 +366,6 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
         </View>
       </Modal>
 
-      {/* --- Modal de Seleção de Veículo --- */}
       <Modal
         visible={showVehicleModal}
         transparent={true}
