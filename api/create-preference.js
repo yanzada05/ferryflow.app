@@ -1,7 +1,7 @@
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import admin from "firebase-admin";
 
-// Inicializa Firebase Admin com JSON completo
+// Inicializa Firebase Admin com databaseURL
 if (!admin.apps.length) {
   const serviceAccount = JSON.parse(
     process.env.FIREBASE_SERVICE_ACCOUNT || "{}"
@@ -9,7 +9,8 @@ if (!admin.apps.length) {
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: `https://ferryflow-71d96.firebaseio.com`, // Adicione esta linha
+    databaseURL: "https://ferryflow-71d96-default-rtdb.firebaseio.com",
+    projectId: "ferryflow-71d96",
   });
 }
 
