@@ -12,14 +12,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { AppScreenProps } from "../../App";
-import { auth } from "../firebase/config";
+import { auth, db } from "../firebase/config"; // 1. IMPORTE O 'db'
+import { doc, setDoc } from "firebase/firestore"; // 2. IMPORTE 'doc' e 'setDoc'
+import { useTicket } from "../context/TicketContext"; // 3. (Para o atalho na Home)
 import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomButton from "../components/CustomButton";
 import Stepper from "../components/Stepper";
 import { VehicleType, VEHICLE_PRICES, PASSENGER_PRICES } from "../types/data";
 
-// URL da API na Vercel
-const API_URL = "https://ferryflow-v3.vercel.app/api/create-preference-simple";
+// NÃO PRECISAMOS MAIS DA API DA VERCEL
+// const API_URL = "https://ferryflow-v3.vercel.app/api/create-preference-simple";
 
 type PurchaseScreenProps = AppScreenProps<"Purchase">;
 
@@ -27,6 +29,7 @@ const AVAILABLE_TIMES = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
 
 export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
   const theme = useTheme() as any;
+  const { setActiveTicket } = useTicket(); // (Para o atalho na Home)
 
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState(new Date());
@@ -65,7 +68,7 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
     setShowVehicleModal(false);
   };
 
-  // MODO DEMONSTRAÇÃO: Simula pagamento sem abrir Mercado Pago
+  // MODO DEMONSTRAÇÃO: Salva o ticket direto no Firebase
   const handleConfirm = async () => {
     setLoading(true);
     const user = auth.currentUser;
@@ -77,77 +80,78 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
     }
 
     try {
-      console.log("Enviando requisição para API...");
+      console.log("Iniciando simulação de pagamento...");
 
-      // Chama a API da Vercel
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      // 4. GERE O TICKET ID AQUI
+      const ticketId = `demo_${Date.now()}_${user.uid.substring(0, 5)}`;
+
+      // 5. CRIE O OBJETO DE DADOS DO TICKET
+      const ticketData = {
+        id: ticketId,
+        userId: user.uid,
+        origin: "Ponta da Espera",
+        destination: "Cujupe",
+        time: time,
+        date: date.toISOString(),
+        vehicle: selectedVehicle,
+        totalPrice: totalPrice,
+        passengers: {
+          adults,
+          children,
         },
-        body: JSON.stringify({
-          userId: user.uid,
-          scheduleId: `${date.toISOString().split("T")[0]}-${time}`,
-          time: time,
-          date: date.toISOString(),
-          vehicleType: selectedVehicle,
-          price: totalPrice,
-          passengers: {
-            adults,
-            children,
-          },
-        }),
-      });
+        status: "Pagamento Aprovado", // 6. DEFINA O STATUS
+        createdAt: new Date().toISOString(),
+      };
 
-      const data = await response.json();
+      // 7. CRIE A REFERÊNCIA DO DOCUMENTO
+      const ticketDocRef = doc(db, "tickets", ticketId);
 
-      console.log("Resposta da API:", data);
+      // 8. SALVE O TICKET DIRETAMENTE NO FIREBASE
+      await setDoc(ticketDocRef, ticketData);
+      console.log("Ticket salvo no Firebase com ID:", ticketId);
 
-      if (data.error) {
-        Alert.alert(
-          "Erro",
-          data.message || "Não foi possível processar a compra"
-        );
+      // 9. (Para o atalho na Home) Salve no contexto global
+      setActiveTicket(ticketData as any); // (Talvez precise ajustar o tipo)
+
+      // 10. Simula processamento (como você já tinha)
+      setTimeout(() => {
         setLoading(false);
-        return;
-      }
 
-      if (data.success) {
-        // Simula processamento do pagamento (aguarda 1.5s)
-        setTimeout(() => {
-          setLoading(false);
-
-          // Mostra confirmação de pagamento
-          Alert.alert(
-            "✅ Pagamento Aprovado!",
-            `Compra realizada com sucesso!\n\n` +
-              `📅 Data: ${date.toLocaleDateString("pt-BR")}\n` +
-              `🕐 Horário: ${time}\n` +
-              `👥 Passageiros: ${adults} adulto(s), ${children} criança(s)\n` +
-              `🚗 Veículo: ${selectedVehicle}\n` +
-              `💰 Valor: R$ ${totalPrice.toFixed(2)}\n` +
-              `🎫 Ticket: ${data.ticketId.substring(0, 16)}...`,
-            [
-              {
-                text: "Ver Meu Ticket",
-                onPress: () => {
-                  navigation.navigate("Ticket", { ticketId: data.ticketId });
-                },
+        // Mostra confirmação de pagamento
+        Alert.alert(
+          "✅ Pagamento Aprovado!",
+          `Compra de demonstração realizada com sucesso!\n\n` +
+            `📅 Data: ${date.toLocaleDateString("pt-BR")}\n` +
+            `🕐 Horário: ${time}\n` +
+            `💰 Valor: R$ ${totalPrice.toFixed(2)}\n` +
+            `🎫 Ticket: ${ticketId.substring(0, 16)}...`,
+          [
+            {
+              text: "Ver Meu Ticket",
+              onPress: () => {
+                // 11. NAVEGUE COM O ID QUE VOCÊ ACABOU DE CRIAR
+                navigation.navigate("Ticket", { ticketId: ticketId });
               },
-            ]
-          );
-        }, 1500);
-      }
+            },
+            {
+              text: "Voltar para Home",
+              onPress: () => navigation.navigate("Home"),
+              style: "cancel",
+            },
+          ]
+        );
+      }, 1500); // 1.5s de espera
     } catch (error) {
-      console.error("Erro ao processar compra:", error);
+      console.error("Erro ao salvar ticket de demonstração:", error);
       Alert.alert(
         "Erro",
-        "Falha na conexão com o servidor. Verifique sua internet."
+        "Não foi possível salvar seu ticket de demonstração."
       );
       setLoading(false);
     }
   };
 
+  // ... (Todo o resto do seu código JSX (styles, return, modals) continua igual)
   const styles = StyleSheet.create({
     container: {
       flex: 1,

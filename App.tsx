@@ -19,6 +19,9 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "./src/firebase/config";
 import { ActivityIndicator, View } from "react-native";
 
+// 1. IMPORTE O TICKETPROVIDER
+import { TicketProvider } from "./src/context/TicketContext";
+
 // 1. Defina TODOS os parâmetros de rota do seu App aqui
 export type RootStackParamList = {
   Login: undefined;
@@ -62,26 +65,35 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <StatusBar style="auto" />
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!user ? (
-            <>
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Register" component={RegisterScreen} />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen name="Purchase" component={PurchaseScreen} />
-              <Stack.Screen name="Schedule" component={ScheduleScreen} />
-              <Stack.Screen name="Queue" component={QueueScreen} />
-              <Stack.Screen name="FerryStatus" component={FerryStatusScreen} />
-              <Stack.Screen name="Ticket" component={TicketScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      {/* 2. ADICIONE O PROVIDER AQUI */}
+      <TicketProvider>
+        <StatusBar style="auto" />
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {!user ? (
+              <>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Register" component={RegisterScreen} />
+              </>
+            ) : (
+              <>
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="Purchase" component={PurchaseScreen} />
+                <Stack.Screen name="Schedule" component={ScheduleScreen} />
+                <Stack.Screen name="Queue" component={QueueScreen} />
+                <Stack.Screen
+                  name="FerryStatus"
+                  component={FerryStatusScreen}
+                />
+                <Stack.Screen name="Ticket" component={TicketScreen} />
+              </>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </TicketProvider>
+      {/* 3. FECHE O PROVIDER AQUI (Essa linha estava faltando no seu código original, mas está implícita no fechamento do ThemeProvider)
+          O Provider deve ser fechado após a NavigationContainer.
+      */}
     </ThemeProvider>
   );
 }

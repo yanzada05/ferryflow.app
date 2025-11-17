@@ -15,6 +15,10 @@ import { auth } from "../firebase/config";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 
+// 1. IMPORTAR O useTicket E O CustomButton
+import { useTicket } from "../context/TicketContext";
+import CustomButton from "../components/CustomButton"; // Assumindo que o caminho é este
+
 // Defina o tipo de navegação
 type HomeNavigationProp = NativeStackNavigationProp<RootStackParamList, "Home">;
 
@@ -123,6 +127,10 @@ const OccupancyStatusCard = () => {
 export default function HomeScreen() {
   const theme = useTheme() as any;
   const nav = useNavigation<HomeNavigationProp>();
+
+  // 2. PEGAR O TICKET ATIVO DO CONTEXTO
+  const { activeTicket } = useTicket();
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -196,6 +204,26 @@ export default function HomeScreen() {
 
         {/* Adição do novo Card de Ocupação */}
         <OccupancyStatusCard />
+
+        {/* --- 3. INÍCIO DO ATALHO DO TICKET --- */}
+        {activeTicket && (
+          <View style={styles.shortcutContainer}>
+            <Text style={styles.shortcutTitle}>🎫 Minha Viagem Ativa</Text>
+            <Text style={styles.shortcutText}>
+              Horário: {activeTicket.time}
+            </Text>
+            <Text style={styles.shortcutText}>
+              Status: {activeTicket.status}
+            </Text>
+            <CustomButton
+              title="Ver Meu Ticket"
+              onPress={() =>
+                nav.navigate("Ticket", { ticketId: activeTicket.id })
+              }
+            />
+          </View>
+        )}
+        {/* --- FIM DO ATALHO DO TICKET --- */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -234,6 +262,33 @@ const homeScreenStyles = (theme: any) =>
       flexWrap: "wrap",
       justifyContent: "space-between",
     },
+
+    // --- 4. ESTILOS ADICIONADOS PARA O ATALHO ---
+    shortcutContainer: {
+      marginTop: 24, // Espaço acima
+      padding: 20,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16, // Para combinar com os cards
+      borderColor: theme.colors.primary, // Destaque
+      borderWidth: 1,
+      elevation: 3,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+    },
+    shortcutTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: theme.colors.primary,
+      marginBottom: 12,
+    },
+    shortcutText: {
+      fontSize: 16,
+      color: theme.colors.text,
+      marginBottom: 16, // Mais espaço antes do botão
+    },
+    // --- FIM DOS ESTILOS ADICIONADOS ---
   });
 
 const menuButtonStyles = (theme: any) =>
