@@ -5,8 +5,18 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E88E5"
+    },
     "android": {
-      "package": "com.yourcompany.ferryflow"
+      "package": "com.yourcompany.ferryflow",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#1565C0"
+      }
     },
     "assetBundlePatterns": ["**/*"],
     "plugins": ["expo-font"]
