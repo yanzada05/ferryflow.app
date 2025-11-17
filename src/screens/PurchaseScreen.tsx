@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  Linking,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,7 +19,7 @@ import Stepper from "../components/Stepper";
 import { VehicleType, VEHICLE_PRICES, PASSENGER_PRICES } from "../types/data";
 
 // URL da API na Vercel
-const API_URL = "https://ferryflow-v3.vercel.app/api/create-preference";
+const API_URL = "https://ferryflow-v3.vercel.app/api/create-preference-simple";
 
 type PurchaseScreenProps = AppScreenProps<"Purchase">;
 
@@ -66,7 +65,7 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
     setShowVehicleModal(false);
   };
 
-  // Função atualizada: chama a API do Vercel
+  // MODO DEMONSTRAÇÃO: Simula pagamento sem abrir Mercado Pago
   const handleConfirm = async () => {
     setLoading(true);
     const user = auth.currentUser;
@@ -88,12 +87,11 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
         },
         body: JSON.stringify({
           userId: user.uid,
-          scheduleId: `${date.toISOString().split("T")[0]}-${time}`, // Ex: "2024-11-16-10:00"
+          scheduleId: `${date.toISOString().split("T")[0]}-${time}`,
           time: time,
           date: date.toISOString(),
           vehicleType: selectedVehicle,
           price: totalPrice,
-          // Dados adicionais (opcional, você pode salvar depois no webhook)
           passengers: {
             adults,
             children,
@@ -114,47 +112,31 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
         return;
       }
 
-      if (data.init_point) {
-        // Pergunta ao usuário se quer abrir o pagamento
-        Alert.alert(
-          "Pagamento",
-          "Você será redirecionado para o Mercado Pago para finalizar o pagamento.",
-          [
-            {
-              text: "Cancelar",
-              style: "cancel",
-              onPress: () => setLoading(false),
-            },
-            {
-              text: "Pagar Agora",
-              onPress: async () => {
-                try {
-                  const canOpen = await Linking.canOpenURL(data.init_point);
+      if (data.success) {
+        // Simula processamento do pagamento (aguarda 1.5s)
+        setTimeout(() => {
+          setLoading(false);
 
-                  if (canOpen) {
-                    await Linking.openURL(data.init_point);
-
-                    // Navega para a tela do ticket
-                    navigation.navigate("Ticket", { ticketId: data.ticketId });
-                  } else {
-                    Alert.alert(
-                      "Erro",
-                      "Não foi possível abrir o link de pagamento"
-                    );
-                  }
-                } catch (error) {
-                  console.error("Erro ao abrir link:", error);
-                  Alert.alert("Erro", "Não foi possível abrir o Mercado Pago");
-                } finally {
-                  setLoading(false);
-                }
+          // Mostra confirmação de pagamento
+          Alert.alert(
+            "✅ Pagamento Aprovado!",
+            `Compra realizada com sucesso!\n\n` +
+              `📅 Data: ${date.toLocaleDateString("pt-BR")}\n` +
+              `🕐 Horário: ${time}\n` +
+              `👥 Passageiros: ${adults} adulto(s), ${children} criança(s)\n` +
+              `🚗 Veículo: ${selectedVehicle}\n` +
+              `💰 Valor: R$ ${totalPrice.toFixed(2)}\n` +
+              `🎫 Ticket: ${data.ticketId.substring(0, 16)}...`,
+            [
+              {
+                text: "Ver Meu Ticket",
+                onPress: () => {
+                  navigation.navigate("Ticket", { ticketId: data.ticketId });
+                },
               },
-            },
-          ]
-        );
-      } else {
-        Alert.alert("Erro", "Link de pagamento não foi gerado");
-        setLoading(false);
+            ]
+          );
+        }, 1500);
       }
     } catch (error) {
       console.error("Erro ao processar compra:", error);
@@ -325,7 +307,18 @@ export default function PurchaseScreen({ navigation }: PurchaseScreenProps) {
           <Text style={styles.totalPrice}>R$ {totalPrice.toFixed(2)}</Text>
 
           {loading ? (
-            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <View>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text
+                style={{
+                  textAlign: "center",
+                  marginTop: 12,
+                  color: theme.colors.muted,
+                }}
+              >
+                Processando pagamento...
+              </Text>
+            </View>
           ) : (
             <CustomButton
               title="Confirmar e Pagar"
