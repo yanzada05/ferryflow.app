@@ -1,8 +1,8 @@
-# 🚢 FerryFlow v3
+#  FerryFlow 
 
 Sistema de compra de passagens de ferry com integração ao Mercado Pago.
 
-## 📱 Sobre o Projeto
+##  Sobre o Projeto
 
 FerryFlow é um aplicativo mobile desenvolvido com React Native (Expo) que permite:
 
@@ -11,7 +11,7 @@ FerryFlow é um aplicativo mobile desenvolvido com React Native (Expo) que permi
 - Acompanhamento de status em tempo real
 - Pagamento via Mercado Pago
 
-## 🛠️ Tecnologias
+##  Tecnologias
 
 - **Frontend:** React Native + Expo
 - **Backend:** Firebase Functions
@@ -20,7 +20,7 @@ FerryFlow é um aplicativo mobile desenvolvido com React Native (Expo) que permi
 - **Pagamentos:** Mercado Pago
 - **Linguagem:** TypeScript
 
-## 🚀 Como Rodar o Projeto
+##  Como Rodar o Projeto
 
 ### Pré-requisitos
 
@@ -102,7 +102,7 @@ Configure o webhook no painel do Mercado Pago apontando para:
 https://sua-regiao-seu-projeto.cloudfunctions.net/mpWebhook
 ```
 
-## 📂 Estrutura do Projeto
+##  Estrutura do Projeto
 
 ```
 ferryflow.app/
@@ -116,9 +116,9 @@ ferryflow.app/
 └── package.json
 ```
 
-## 🔐 Segurança
+##  Segurança
 
-⚠️ **IMPORTANTE:**
+ **IMPORTANTE:**
 
 - Nunca commite o arquivo `.env` no Git
 - Configure regras de segurança do Firestore
@@ -131,7 +131,5 @@ Este projeto está sob a licença MIT.
 ## Autor
 
 Yan - [GitHub](https://github.com/yanzada05)
-
-## 🤝 Contribuindo
 
 Contribuições são bem-vindas!
